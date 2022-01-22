@@ -31,7 +31,7 @@ WORKDIR /app
 COPY --from=build /app/target/springboot-wxcloudrun-1.0.jar .
 
 # 暴露端口
-EXPOSE 80
+EXPOSE 8080
 
 # 执行启动命令
 CMD ["java", "-jar", "/app/springboot-wxcloudrun-1.0.jar"]
