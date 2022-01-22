@@ -4,7 +4,8 @@ server:
 spring:
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://sh-cynosdbmysql-grp-law7lvum.sql.tencentcdb.com:21121/springboot_demo
+#    url: jdbc:mysql://sh-cynosdbmysql-grp-law7lvum.sql.tencentcdb.com:21121/springboot_demo
+    url: jdbc:mysql://10.0.224.6:3306/springboot_demo
     username: root
     password: "!a465323264"
   mvc:
