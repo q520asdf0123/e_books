@@ -48,6 +48,22 @@ public class CounterController {
     return ApiResponse.ok(count);
   }
 
+  /**
+   * 获取当前计数
+   * @return API response json
+   */
+  @GetMapping(value = "/api/count1")
+  ApiResponse get1() {
+    logger.info("/api/count get request");
+    Optional<Counter> counter = counterService.getCounter(1);
+    Integer count = 0;
+    if (counter.isPresent()) {
+      count = counter.get().getCount();
+    }
+
+    return ApiResponse.ok(count);
+  }
+
 
   /**
    * 更新计数，自增或者清零
