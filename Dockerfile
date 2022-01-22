@@ -30,6 +30,7 @@ WORKDIR /app
 # 将构建产物jar包拷贝到运行时目录中
 COPY --from=build /app/target/springboot-wxcloudrun-1.0.jar .
 
+
 # 暴露端口
 EXPOSE 8080
 
