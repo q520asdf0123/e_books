@@ -3,21 +3,23 @@
 <head>
     <title>Search Result</title>
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+    <meta name="viewport"
+          content="width=device-width,initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
 </head>
 <body>
-<!--<p data-loc="iii">ddd</p>-->
 
 </body>
 
 <script th:inline="javascript" th:href="@{~/static/jquery-3.5.1.js}">
     var result = [[${data}]]
-    console.log(result)
+    // console.log(result)
     document.write(result);
 
     let tags = document.getElementsByTagName("a")
     for (let i = 0; i < tags.length; i++) {
         let item = tags.item(i);
         let attribute = item.getAttribute("href");
+        // console.log("============",attribute)
         item.removeAttribute("href");
         if (attribute != null) {
             item.addEventListener("click", function () {
@@ -29,12 +31,20 @@
                 }
 
                 let s = JSON.stringify(urlClass);
-                console.log(s)
+                // console.log("============",s)
                 httpRequest.send(s);
                 httpRequest.onreadystatechange = () => {
                     if (httpRequest.readyState == 4 && httpRequest.status == 200) {
-                        var data = JSON.parse(httpRequest.responseText);
-                        location.replace(data.url)
+                        // console.log("测试", httpRequest.responseText)
+                        document.write(httpRequest.responseText);
+
+                        // myWindow = window.open('', '', 'width=200,height=100')
+                        // myWindow.document.write(httpRequest.responseText)
+                        // myWindow.focus()
+                        // myWindow.opener.document.write(httpRequest.responseText)
+
+                        // var data = JSON.parse(httpRequest.responseText);
+                        // location.replace("download")
                     }
                 }
 
