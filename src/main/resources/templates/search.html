@@ -4,7 +4,7 @@
     <title>Search Result</title>
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
     <meta name="viewport"
-          content="width=device-width,initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+          content="width=device-width, initial-scale=1.0, minimum-scale=0.5, maximum-scale=2.0, user-scalable=yes"/>
 </head>
 <body>
 
@@ -20,9 +20,11 @@
         let item = tags.item(i);
         let attribute = item.getAttribute("href");
         // console.log("============",attribute)
-        item.removeAttribute("href");
+        // item.removeAttribute("href");
+        // item.preventDefault();
         if (attribute != null) {
-            item.addEventListener("click", function () {
+            item.addEventListener("click", function (even) {
+                even.preventDefault();
                 var httpRequest = new XMLHttpRequest();
                 httpRequest.open("POST", "/selectInfo", true);
                 httpRequest.setRequestHeader("Content-Type", "application/json");
