@@ -7,65 +7,86 @@
           content="width=device-width, initial-scale=1.0, minimum-scale=0.5, maximum-scale=2.0, user-scalable=yes"/>
 </head>
 <body>
+<div id="output-box"></div>
 
 </body>
 
 <script th:inline="javascript" th:href="@{~/static/jquery-3.5.1.js}">
-    var result = [[${data}]]
-    // console.log(result)
-    document.write(result);
 
-    let tags = document.getElementsByTagName("a")
-    for (let i = 0; i < tags.length; i++) {
-        let item = tags.item(i);
-        let attribute = item.getAttribute("href");
-        // console.log("============",attribute)
-        // item.removeAttribute("href");
-        // item.preventDefault();
-        if (attribute != null) {
-            item.addEventListener("click", function (even) {
-                even.preventDefault();
-                var httpRequest = new XMLHttpRequest();
-                httpRequest.open("POST", "/selectInfo", true);
-                httpRequest.setRequestHeader("Content-Type", "application/json");
-                var urlClass = {
-                    "url": attribute
-                }
+    function downClick(url) {
+        console.log("1========", url)
+        var httpRequest = new XMLHttpRequest();
+        httpRequest.open("POST", "/selectInfo", true);
+        httpRequest.setRequestHeader("Content-Type", "application/json");
+        var urlClass = {
+            "url": "/" + url
+        }
 
-                let s = JSON.stringify(urlClass);
-                // console.log("============",s)
-                httpRequest.send(s);
-                httpRequest.onreadystatechange = () => {
-                    if (httpRequest.readyState == 4 && httpRequest.status == 200) {
-                        // console.log("测试", httpRequest.responseText)
-                        document.write(httpRequest.responseText);
+        let s = JSON.stringify(urlClass);
+        console.log("2========", s)
+        httpRequest.send(s);
+        httpRequest.onreadystatechange = () => {
+            if (httpRequest.readyState == 4 && httpRequest.status == 200) {
+                // console.log("测试", httpRequest.responseText)
+                document.write(httpRequest.responseText);
 
-                        // myWindow = window.open('', '', 'width=200,height=100')
-                        // myWindow.document.write(httpRequest.responseText)
-                        // myWindow.focus()
-                        // myWindow.opener.document.write(httpRequest.responseText)
+                // myWindow = window.open('', '', 'width=200,height=100')
+                // myWindow.document.write(httpRequest.responseText)
+                // myWindow.focus()
+                // myWindow.opener.document.write(httpRequest.responseText)
 
-                        // var data = JSON.parse(httpRequest.responseText);
-                        // location.replace("download")
-                    }
-                }
-
-            });
+                // var data = JSON.parse(httpRequest.responseText);
+                // location.replace("download")
+            }
         }
     }
+
+    var result = [[${data}]]
+    document.write(result);
+    // console.log(result)
+    // let tags = document.getElementsByTagName("a")
+    // for (let i = 0; i < tags.length; i++) {
+    //     let item = tags.item(i);
+    //     let attribute = item.getAttribute("href");
+    //     // console.log("============",attribute)
+    //     // item.removeAttribute("href");
+    //     // item.preventDefault();
+    //     document.write(result);
+    //     if (attribute != null) {
+    //         console.log("1======", item);
+    //         console.log("2======", attribute);
+    //         item.setAttribute("href", "#");
+    //         item.setAttribute("url", attribute)
+    //         // item.addEventListener("click", function (even) {
+    //         var httpRequest = new XMLHttpRequest();
+    //         httpRequest.open("POST", "/selectInfo", true);
+    //         httpRequest.setRequestHeader("Content-Type", "application/json");
+    //         var urlClass = {
+    //             "url": attribute
+    //         }
+    //
+    //         let s = JSON.stringify(urlClass);
+    //         httpRequest.send(s);
+    //         httpRequest.onreadystatechange = () => {
+    //             if (httpRequest.readyState == 4 && httpRequest.status == 200) {
+    //                 // console.log("测试", httpRequest.responseText)
+    //                 document.write(httpRequest.responseText);
+    //
+    //                 // myWindow = window.open('', '', 'width=200,height=100')
+    //                 // myWindow.document.write(httpRequest.responseText)
+    //                 // myWindow.focus()
+    //                 // myWindow.opener.document.write(httpRequest.responseText)
+    //
+    //                 // var data = JSON.parse(httpRequest.responseText);
+    //                 // location.replace("download")
+    //             }
+    //         }
+    //         //
+    //         //     // console.log("=============", even.preventDefault);
+    //         // });
+    //     }
+    // }
 </script>
+
 </html>
 
-<!--<!DOCTYPE html>-->
-<!--<html lang="en">-->
-<!--<head>-->
-<!--    <meta charset="UTF-8">-->
-<!--    <title>write输出内容到页面中</title>-->
-<!--</head>-->
-<!--<script>-->
-<!--    document.write("hello");-->
-<!--    document.write("<h1>通过document.write输出内容</h1>");-->
-<!--</script>-->
-<!--<body>-->
-<!--</body>-->
-<!--</html>-->

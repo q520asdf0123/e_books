@@ -9,6 +9,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
+import org.springframework.util.ObjectUtils;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -25,18 +26,33 @@ public class SearchController {
         ResponseEntity<String> forEntity = restTemplate.getForEntity("https://www.pdfdrive.com/search?q=" + name, String.class);
         Document parse = Jsoup.parse(forEntity.getBody());
         Elements elementsByClass = parse.getElementsByClass("files-new");
-        Elements ul = elementsByClass.tagName("ul");
+        Element ul = elementsByClass.tagName("ul").get(0);
 //        Elements row = elementsByClass.select("row");
-        Elements li = ul.select("li");
-        int index = 1;
-        for (Element element : li) {
-//            Element test = element.getElementsByAttribute("test1111");
-//            Element element1 = element.get
-//            Elements onclick = element.getElementsByAttribute("onclick");
-//            System.out.println();
+        Elements a = ul.getElementsByTag("a");
+        Elements li = ul.getElementsByTag("li");
+        for (int i = 0; i < li.size(); i++) {
+            Element element = li.get(i);
+            String onclick = element.attr("onclick");
+            if (ObjectUtils.isEmpty(onclick)) {
+                continue;
+            }
 
+            element.attr("onclick", "javascript:void(0);");
+            li.set(i, element);
         }
-//        model.addAttribute("data", elementsByClass.toString());
+        for (int i = 0; i < a.size(); i++) {
+            Element element = a.get(i);
+            String dataId = element.attr("data-id");
+            String dataTo = element.attr("data-to");
+            if (ObjectUtils.isEmpty(dataId) && ObjectUtils.isEmpty(dataTo)) {
+                continue;
+            }
+            String href = element.attr("href").replaceFirst("/", "");
+            element.attr("href", "javascript:void(0);");
+            element.attr("onclick", "downClick('" + href + "')");
+            a.set(i, element);
+        }
+
         model.addAttribute("data", ul.toString());
         return "search";
     }
