@@ -1,114 +1,97 @@
-package com.tiny.hero.plat.module.channel;
+package com.tiny.hero.plat.module.identityCard;
 
-import com.alibaba.fastjson.JSONObject;
-import com.tiny.hero.plat.common.constant.GameError;
-import com.tiny.hero.plat.common.domain.ResponseDTO;
-import com.tiny.hero.plat.module.account.dao.PayDao;
-import com.tiny.hero.plat.module.account.dao.RoleDao;
-import com.tiny.hero.plat.module.account.domain.vo.AuditVo;
-import com.tiny.hero.plat.module.channel.domain.entity.ChannelEntity;
-import com.tiny.hero.plat.module.channel.domain.entity.PlatEntity;
-import com.tiny.hero.plat.module.identityCard.dao.IdentityCardDao;
-import com.tiny.hero.plat.module.identityCard.entity.IdentityCard;
-import com.tiny.hero.plat.util.HolidayUtils;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Service;
+import javax.crypto.Cipher;
+import javax.crypto.spec.IvParameterSpec;
+import javax.crypto.spec.SecretKeySpec;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
+import java.util.Arrays;
 
-import javax.annotation.Resource;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
-import java.time.temporal.ChronoUnit;
-import java.util.Date;
-import java.util.List;
-import java.util.Objects;
+public class DesDecryptor {
 
-@Service
-public class AuditService {
+    public static void main(String[] args) throws Exception {
+        // --- 准备工作：模拟加密过程 ---
 
-    @Resource
-    private PlatCache platCache;
+        // 1. 必须使用与加密时完全相同的 salt！
+        String salt = "@KeuL1FS"; // 这是一个示例 salt，请替换为你自己的
+        String originalText = "4rhFSDA9y/nrLb9NMVjUOY/1FNNhlirV"; // 你的 req.getCode()
 
-    @Resource
-    private ChannelCache channelCache;
-    @Resource
-    private IdentityCardDao identityCardDao;
-    @Resource
-    private PayDao payDao;
-    @Resource
-    private RoleDao roleDao;
-    @Value("${open.auto}")
-    private boolean openAuto;
+        // 加密 (为了生成一个可供解密的密文)
+        byte[] keyBytes = getKeyOrIv(salt.getBytes(StandardCharsets.UTF_8));
+        byte[] ivBytes = getKeyOrIv(salt.getBytes(StandardCharsets.UTF_8));
+        
+        SecretKeySpec secretKey = new SecretKeySpec(keyBytes, "DES");
+        IvParameterSpec iv = new IvParameterSpec(ivBytes);
+        Cipher encryptCipher = Cipher.getInstance("DES/CBC/PKCS5Padding");
+        encryptCipher.init(Cipher.ENCRYPT_MODE, secretKey, iv);
+        
+        byte[] encryptedBytes = encryptCipher.doFinal(originalText.getBytes(StandardCharsets.UTF_8));
+        String base64EncryptedString = Base64.getEncoder().encodeToString(encryptedBytes);
+        
+        System.out.println("原始文本: " + originalText);
+        System.out.println("加密后的Base64字符串: " + base64EncryptedString);
+        System.out.println("------------------------------------------");
 
-    public ResponseDTO<Boolean> isBanhao(String channel) {
-        ChannelEntity channelEntity = channelCache.getChannel(channel);
-        if (Objects.isNull(channelEntity)) {
-            return ResponseDTO.wrap(GameError.SYSTEM_ERROR);
-        }
 
-        PlatEntity plat = platCache.getPlat(channelEntity.getLoginPlat());
-        if (Objects.isNull(plat)) {
-            return ResponseDTO.wrap(GameError.SYSTEM_ERROR);
-        }
+        // --- 核心：解密过程 ---
+        String decryptedText = decrypt(originalText, salt);
 
-        return ResponseDTO.succData(plat.getBanhao() == 1);
-    }
+        System.out.println("解密后的文本: " + decryptedText);
 
-    public ResponseDTO<AuditVo> auditUserInfo(int userId) {
-        IdentityCard identityCard = identityCardDao.queryId(userId);
-        String birthday = JSONObject.parseObject(identityCard.getIdCardInfor()).getJSONObject("IdCardInfor")
-                .getString("birthday");
-        String[] split = birthday.split("-");
-        LocalDate localDate =
-                LocalDate.of(Integer.parseInt(split[0]), Integer.parseInt(split[1]), Integer.parseInt(split[2]));
-        LocalDate curr = LocalDate.now();
-        long year = ChronoUnit.YEARS.between(localDate, curr);
-
-        List<Long> roleIds = roleDao.selectRoleIdsByUserId(userId);
-
-        Integer total = 0;
-        if (!roleIds.isEmpty()) {
-            // 获取本月第一天和最后一天，格式化为字符串
-            LocalDateTime startOfMonth = LocalDateTime.now().withDayOfMonth(1).withHour(0).withMinute(0).withSecond(0).withNano(0);
-            LocalDateTime endOfMonth = startOfMonth.plusMonths(1).minusSeconds(1);
-            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-            String startTime = startOfMonth.format(formatter);
-            String endTime = endOfMonth.format(formatter);
-
-            total = payDao.getTotalAmountByRoleIds(roleIds, startTime, endTime);
-        }
-
-        AuditVo auditVo = new AuditVo();
-        auditVo.setTotalRechargeAmount(total);
-        auditVo.setCurYear((int) year);
-
-        int curMinute = HolidayUtils.surplusMinute();
-        if (!HolidayUtils.isWorkingDay() || curMinute <= 0) {
-            auditVo.setCurMinute(-1);
-        }
-
-        if (year < 8) {
-            auditVo.setMaxRechargeAmount(0);
-            auditVo.setMaxSingleRechargeAmount(0);
-        } else if (year < 16) {
-            auditVo.setMaxSingleRechargeAmount(5000);
-            auditVo.setMaxRechargeAmount(20000);
-        } else if (year < 18) {
-            auditVo.setMaxSingleRechargeAmount(10000);
-            auditVo.setMaxRechargeAmount(40000);
+        // 验证解密是否成功
+        if (originalText.equals(decryptedText)) {
+            System.out.println("成功: 解密后的文本与原始文本一致！");
         } else {
-            auditVo.setMaxSingleRechargeAmount(99999999);
-            auditVo.setMaxRechargeAmount(99999999);
-            auditVo.setCurMinute(9999);
+            System.out.println("失败: 解密结果不正确！");
         }
-
-        return ResponseDTO.succData(auditVo);
     }
 
+    /**
+     * 使用DES/CBC/PKCS5Padding进行解密
+     *
+     * @param base64EncryptedString Base64编码的加密字符串
+     * @param salt                  用于生成密钥和IV的盐值（必须与加密时相同）
+     * @return 解密后的原始字符串
+     * @throws Exception 如果解密失败
+     */
+    public static String decrypt(String base64EncryptedString, String salt) throws Exception {
+        // 1. 将Base64编码的密文解码成字节数组
+        byte[] encryptedBytes = Base64.getDecoder().decode(base64EncryptedString);
 
-    public ResponseDTO<Void> updateRoleInfo(int userId, long roleId) {
-        roleDao.upsertRole(userId, roleId);
-        return ResponseDTO.succ();
+        // 2. 使用与加密时完全相同的 salt 和编码（如UTF-8）生成密钥和IV
+        //    注意：DES的密钥和IV长度必须是8字节！
+        byte[] keyBytes = getKeyOrIv(salt.getBytes(StandardCharsets.UTF_8));
+        byte[] ivBytes = getKeyOrIv(salt.getBytes(StandardCharsets.UTF_8));
+        
+        SecretKeySpec secretKey = new SecretKeySpec(keyBytes, "DES");
+        IvParameterSpec iv = new IvParameterSpec(ivBytes);
+
+        // 3. 创建Cipher实例
+        Cipher decryptCipher = Cipher.getInstance("DES/CBC/PKCS5Padding");
+
+        // 4. 初始化Cipher为解密模式
+        decryptCipher.init(Cipher.DECRYPT_MODE, secretKey, iv);
+
+        // 5. 执行解密
+        byte[] decryptedBytes = decryptCipher.doFinal(encryptedBytes);
+
+        // 6. 将解密后的字节数组转换为字符串（使用正确的编码）
+        return new String(decryptedBytes, StandardCharsets.UTF_8);
+    }
+    
+    /**
+     * DES算法要求密钥和IV的长度必须是8字节（64位）。
+     * 如果提供的字节数组长度不是8，需要进行处理。
+     * 常见的处理方式是取前8个字节。
+     *
+     * @param originalBytes 原始字节数组
+     * @return 8字节的数组
+     */
+    private static byte[] getKeyOrIv(byte[] originalBytes) {
+        byte[] result = new byte[8];
+        // 如果原始字节数不足8，则用0填充；如果超过8，则截取前8位。
+        // Arrays.copyOf 完美地实现了这个逻辑。
+        System.arraycopy(originalBytes, 0, result, 0, Math.min(originalBytes.length, 8));
+        return result;
     }
 }
