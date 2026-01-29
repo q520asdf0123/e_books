@@ -1,6 +1,0 @@
-CREATE TABLE `u_role` (
-                          `user_id` int(11) NOT NULL,
-                          `role_id` bigint(20) NOT NULL,
-                          `update_time` datetime DEFAULT NULL,
-                          UNIQUE KEY `USER_ROKLE_INDEX` (`user_id`,`role_id`) USING BTREE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
