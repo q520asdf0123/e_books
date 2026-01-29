@@ -1,37 +1,20 @@
-
-package com.tiny.hero.plat.module.account.plat.tinynet;
-
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.util.*;
-
-import javax.annotation.PostConstruct;
-import javax.servlet.http.HttpServletRequest;
-
-import com.tiny.hero.plat.common.constant.PayState;
-import com.tiny.hero.plat.module.account.domain.dto.LoginDto;
-import com.tiny.hero.plat.module.account.domain.dto.PlatResultDto;
-import com.tiny.hero.plat.util.DuokeHttpUtil;
-import org.apache.commons.lang3.StringUtils;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.core.io.ClassPathResource;
-import org.springframework.core.io.Resource;
-import org.springframework.stereotype.Component;
-import org.springframework.util.CollectionUtils;
+package com.tiny.hero.plat.module.account;
 
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
-import com.tiny.hero.plat.common.constant.AuditType;
-import com.tiny.hero.plat.config.KingwarConfig;
-import com.tiny.hero.plat.config.PlayerIdSeq;
-import com.tiny.hero.plat.constant.BindType;
-import com.tiny.hero.plat.module.account.TokenManager;
-import com.tiny.hero.plat.module.account.dao.AccountDao;
-import com.tiny.hero.plat.module.account.domain.entity.AccountEntity;
+import com.tiny.hero.plat.common.constant.GameError;
+import com.tiny.hero.plat.common.constant.GmOpType;
+import com.tiny.hero.plat.common.domain.ResponseDTO;
 import com.tiny.hero.plat.module.account.domain.entity.PayInfo;
-import com.tiny.hero.plat.module.account.plat.PlatBase;
-import com.tiny.hero.plat.service.IAppleService;
-import com.tiny.hero.plat.util.RSAUtil;
+import com.tiny.hero.plat.module.account.domain.vo.BindVo;
+import com.tiny.hero.plat.module.account.domain.vo.LoginVo;
+import com.tiny.hero.plat.module.account.domain.vo.VerifyVo;
+import com.tiny.hero.plat.module.message.Handler;
+import com.tiny.hero.plat.module.message.pool.MessagePool;
+import com.tiny.hero.plat.module.server.ServerCache;
+import com.tiny.hero.plat.util.DuokeHttpUtil;
+import com.tiny.hero.plat.util.DuokeIPUtil;
+import com.tiny.hero.plat.util.HttpPacket;
 import com.google.api.client.googleapis.auth.oauth2.GoogleCredential;
 import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;
 import com.google.api.client.googleapis.auth.oauth2.GoogleIdTokenVerifier;
@@ -42,366 +25,243 @@ import com.google.api.client.json.jackson2.JacksonFactory;
 import com.google.api.services.androidpublisher.AndroidPublisher;
 import com.google.api.services.androidpublisher.AndroidPublisherScopes;
 import com.google.api.services.androidpublisher.model.ProductPurchase;
-import com.google.common.collect.Maps;
-
-import cn.hutool.core.date.DateUtil;
-import cn.hutool.http.HttpUtil;
+import com.tiny.hero.plat.module.account.domain.dto.BindDto;
+import com.tiny.hero.plat.module.account.domain.dto.DeleteDto;
+import com.tiny.hero.plat.module.account.domain.dto.LoginDto;
+import com.tiny.hero.plat.module.account.domain.dto.VerifyDto;
+import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.core.io.DefaultResourceLoader;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.ResourceLoader;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
+
+import javax.servlet.http.HttpServletRequest;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 @Slf4j
-@Component
-public class TinynetBanhaoPlat extends PlatBase {
+@RestController
+public class AccountController {
 
     @Autowired
-    private KingwarConfig kingwarConfig;
-
+    AccountService accountService;
     @Autowired
-    private TokenManager tokenManager;
+    private ServerCache serverCache;
 
-    @Autowired
-    private AccountDao accountDao;
+    @PostMapping("/account/login")
+    public ResponseDTO<LoginVo> login(@RequestBody LoginDto req) {
+        HttpServletRequest request =
+                ((ServletRequestAttributes) RequestContextHolder.getRequestAttributes()).getRequest();
+        String ip = DuokeIPUtil.getRemoteIp(request);
+        req.setIp(ip);
 
-    @Autowired
-    private PlayerIdSeq playerIdSeq;
-
-    @Autowired
-    private IAppleService iAppleService;
-
-    private final Map<String, Integer> productMap = new HashMap<>();
-
-    @PostConstruct
-    public void init() {
-        super.init();
-        productMap.put("com.tinynet.hero.120", 1299);
-        productMap.put("com.tinynet.hero.620", 6899);
-        productMap.put("com.tinynet.hero.1250", 12899);
-        productMap.put("com.tinynet.hero.1890", 19899);
-        productMap.put("com.tinynet.hero.3160", 29899);
-        productMap.put("com.tinynet.hero.6360", 64899);
-        productMap.put("com.tinynet.hero.300", 5899);
-        productMap.put("com.tinynet.hero.3280", 64899);
+        return accountService.login(req);
     }
 
-    @Override
-    public PlatResultDto doLogin(LoginDto loginDto) {
+    @PostMapping("/account/verify")
+    public ResponseDTO<VerifyVo> verify(@RequestBody VerifyDto req) {
+        return accountService.verify(req);
+    }
+
+    /**
+     * 绑定账号
+     *
+     * @param req
+     * @return
+     */
+    @PostMapping("/account/bind")
+    public ResponseDTO<BindVo> bind(@RequestBody BindDto req) {
+        return accountService.bind(req);
+    }
+
+    @PostMapping("/account/delete")
+    public ResponseDTO delete(@RequestBody DeleteDto req) {
+        return accountService.delete(req);
+    }
+
+    @PostMapping("/account/codeLogin")
+    public ResponseDTO<LoginVo> codeLogin(@RequestBody LoginDto req) {
+        HttpServletRequest request =
+                ((ServletRequestAttributes) RequestContextHolder.getRequestAttributes()).getRequest();
+        String ip = DuokeIPUtil.getRemoteIp(request);
+        req.setIp(ip);
+
+        return accountService.codeLogin(req);
+
+    }
+
+    @RequestMapping("/account/payBackHaiTunQuick")
+    public String payBack(HttpServletRequest request) {
+        return accountService.payBack(request, "haitun");
+    }
+
+    @RequestMapping("/account/payBackHaiTunQuick2")
+    public String payBackHaiTun2(HttpServletRequest request) {
+        return accountService.payBack(request, "haitun2");
+    }
+
+    @RequestMapping("/account/payBackGameCaff")
+    public String payBackGameCaff(HttpServletRequest request) {
+        return accountService.payBack(request, "gamecaff");
+    }
+
+    @RequestMapping("/account/payBackGameCaff2")
+    public String payBackGameCaff2(HttpServletRequest request) {
+        return accountService.payBack(request, "gamecaff2");
+    }
+
+    @RequestMapping("/account/payBackNewGameCaff")
+    public String payBackNewGameCaff(HttpServletRequest request) {
+        return accountService.payBack(request, "gamecaff2");
+    }
+
+    @RequestMapping("/account/payBackGameCaffCN")
+    public String payBackGameCaffCN(HttpServletRequest request) {
+        return accountService.payBack(request, "gamecaff_cn");
+    }
+
+    @RequestMapping("/account/payBackGameCaffKR")
+    public String payBackGameCaffKR(HttpServletRequest request) {
+        return accountService.payBack(request, "gamecaff_kr");
+    }
+
+    @RequestMapping("/account/payBackTinynetIos")
+    public String payBackTinynetIos(HttpServletRequest request) {
+        return accountService.payBack(request, "tinynet_ios");
+    }
+
+    @PostMapping("/account/payBackTinynetGoogle")
+    public String payBackTinynetGoogle(HttpServletRequest request) {
+        return accountService.payBack(request, "tinynet_and");
+    }
+
+    @PostMapping("/account/payBackBanhao")
+    public String payBackBanhao(HttpServletRequest request) {
+        return accountService.payBack(request, "tinynet_banhao");
+    }
+
+    @Data
+    public static class Test {
+        private String packageName;
+        private String productId;
+        private String purchaseToken;
+    }
+
+    @PostMapping("/testGoogle")
+    public String testGoogle(@RequestBody Test test) {
+
         try {
-            switch (loginDto.getLoginFlag()) {
-                case "tinynet": {
-                    String url = kingwarConfig.getDuokeplatUrl();
+            log.info("test info:{}", test);
+            List<String> scopes = new ArrayList<>();
+            scopes.add(AndroidPublisherScopes.ANDROIDPUBLISHER);
+            ResourceLoader resourceLoader = new DefaultResourceLoader();
+            Resource resource = new ClassPathResource("com/tiny/hero/plat/module/account/plat/google/" + "hero.json");
+            GoogleCredential credential = GoogleCredential.fromStream(resource.getInputStream()).createScoped(scopes);
+            // 使用谷歌凭据和收据从谷歌获取购买信息
+            HttpTransport httpTransport = GoogleNetHttpTransport.newTrustedTransport();
+            JacksonFactory jsonFactory = new JacksonFactory();
+            AndroidPublisher publisher =
+                    new AndroidPublisher.Builder(httpTransport, jsonFactory, credential).setApplicationName("hero").build();
+            AndroidPublisher.Purchases purchases = publisher.purchases();
+            final AndroidPublisher.Purchases.Products.Get request =
+                    purchases.products().get(test.getPackageName(), test.getProductId(), test.getPurchaseToken());
 
-                    Map<String, String> headers = Maps.newHashMap();
-                    JSONObject postData = new JSONObject();
-                    postData.put("duokeId", loginDto.getParam().getString("duokeId"));
-                    postData.put("duokeToken", loginDto.getParam().getString("duokeToken"));
-                    postData.put("time", loginDto.getParam().getString("time"));
+            ProductPurchase execute = request.execute();
+            log.info("===========>:{}", execute);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
 
-                    String resultStr = "";
-                    try {
-                        resultStr = DuokeHttpUtil.sendPostJson(url, postData.toJSONString(), headers);
-                    } catch (Exception e) {
-                        log.error("duokePlat: " + resultStr, e);
-                    }
-                    if (!"".equals(resultStr)) {
-                        JSONObject resultJson = JSON.parseObject(resultStr);
-                        int resultCode = resultJson.getIntValue("code");
-                        JSONObject resultData = resultJson.getJSONObject("data");
-                        if (resultCode == 1) {
-                            int duokeId = resultData.getIntValue("duokeId");
-                            int audit = resultData.getInteger("audit");
-                            return PlatResultDto.succ(String.valueOf(duokeId), AuditType.fromType(audit),
-                                    loginDto.getLoginPlat());
-                        } else {
-                            return PlatResultDto.faild("错误的返回码: " + resultCode);
-                        }
-                    } else {
-                        return PlatResultDto.faild("json格式错误");
-                    }
-                }
-                case "google": {
-                    String identityToken =
-                            StringUtils.isBlank(loginDto.getIdentityToken()) ? "" : loginDto.getIdentityToken();
-                    ApacheHttpTransport transport = new ApacheHttpTransport();
-                    JacksonFactory jsonFactory = new JacksonFactory();
-                    GoogleIdTokenVerifier verifier = new GoogleIdTokenVerifier.Builder(transport, jsonFactory)
+        return "ok;";
+    }
+
+    @GetMapping("/testGoogleLogin")
+    public String testGoogle() {
+
+        try {
+            ApacheHttpTransport transport = new ApacheHttpTransport();
+            JacksonFactory jsonFactory = new JacksonFactory();
+            GoogleIdTokenVerifier verifier =
+                    new GoogleIdTokenVerifier.Builder(transport, jsonFactory)
                             .setAudience(Collections
                                     .singletonList("651222524053-4fkqosf6hmcko67rr3uoole2ffan627j.apps.googleusercontent.com"))
                             .build();
-                    GoogleIdToken clientIdToken;
-                    try {
-                        clientIdToken = verifier.verify(identityToken);
-                    } catch (Exception e) {
-                        log.error("token解析错误:{}", e.getMessage(), e);
-                        return PlatResultDto.faild("google token解析错误");
-                    }
-
-                    if (Objects.isNull(clientIdToken)
-                            || DateUtil.dateSecond().second() > clientIdToken.getPayload().getExpirationTimeSeconds()) {
-                        return PlatResultDto.faild("google token过期,请重新登录");
-                    }
-
-                    String clientId = clientIdToken.getPayload().getSubject();
-                    String token = tokenManager.getAppleToken(clientId);
-                    if (StringUtils.isBlank(token)) {
-                        AccountEntity accountEntity = accountDao.getByAccountAndLoginChannelOfBind(loginDto.getUserId(),
-                                loginDto.getChannelId(), BindType.google.getId());
-                        if (Objects.nonNull(accountEntity)) {
-                            if (!accountEntity.getBindAccount().equals(clientId)) {
-                                return PlatResultDto.faild("google 登录账号不同");
-                            }
-                        }
-                    }
-
-                    tokenManager.updateAppleToken(clientId, identityToken);
-                    return PlatResultDto.succ(clientId, AuditType.NONE, loginDto.getLoginPlat());
-                }
-
-                case "facebook": {
-                    if (StringUtils.isBlank(loginDto.getIdentityToken())) {
-                        String currToken = tokenManager.getAppleToken(loginDto.getUserId());
-                        if (StringUtils.isBlank(currToken)) {
-                            return PlatResultDto.faild("facebook token失效");
-                        }
-                        String clientId;
-                        try {
-                            Map<String, Object> userInfo = iAppleService.getUserInfo(currToken);
-                            Object data = userInfo.get("data");
-                            JSONObject resultJson = (JSONObject) JSONObject.toJSON(data);
-                            clientId = resultJson.getString("user_id");
-                            boolean isValid = resultJson.getBoolean("is_valid");
-                            if (!isValid) {
-                                return PlatResultDto.faild("facebook token过期");
-                            }
-
-                        } catch (Exception e) {
-                            log.error("facebook token error: {}", currToken, e);
-                            return PlatResultDto.faild("facebook解析错误");
-                        }
-
-                        if (!loginDto.getUserId().equals(clientId)) {
-                            return PlatResultDto.faild("facebook 登录账号不同");
-                        }
-
-                        tokenManager.updateAppleToken(clientId, currToken);
-                        return PlatResultDto.succ(clientId, AuditType.NONE, loginDto.getLoginPlat());
-                    }
-
-                    String clientId;
-                    try {
-                        Map<String, Object> userInfo = iAppleService.getUserInfo(loginDto.getIdentityToken());
-                        Object data = userInfo.get("data");
-                        JSONObject resultJson = (JSONObject) JSONObject.toJSON(data);
-                        clientId = resultJson.getString("user_id");
-
-                        boolean isValid = resultJson.getBoolean("is_valid");
-                        if (!isValid) {
-                            return PlatResultDto.faild("facebook token过期");
-                        }
-
-                    } catch (Exception e) {
-                        log.error("facebook token error: {}", loginDto.getIdentityToken(), e);
-                        return PlatResultDto.faild("facebook解析错误");
-                    }
-
-                    AccountEntity accountEntity = accountDao.getByAccountAndLoginChannelOfBind(loginDto.getUserId(),
-                            loginDto.getChannelId(), BindType.google.getId());
-
-                    if (Objects.nonNull(accountEntity)) {
-                        if (!accountEntity.getBindAccount().equals(clientId)) {
-                            return PlatResultDto.faild("facebook 登录账号不同");
-                        }
-                    }
-
-                    tokenManager.updateAppleToken(clientId, loginDto.getIdentityToken());
-                    return PlatResultDto.succ(clientId, AuditType.NONE, loginDto.getLoginPlat());
-                }
-                case "guest": {
-                    try {
-                        String encryptByPublicKey = RSAUtil.decryptByPrivateKey(loginDto.getUuid());
-                        JSONObject json = JSONObject.parseObject(encryptByPublicKey);
-                        String clientId = json.getString("clientId");
-                        if (!Boolean.parseBoolean(HttpUtil.get(kingwarConfig.checkClientId(clientId)))) {
-                            log.error("非法的clientId");
-                            return PlatResultDto.faild("非法的clientId");
-                        }
-                        AccountEntity accountEntity = accountDao.getByClient(clientId, loginDto.getLoginPlat());
-                        // uuid没有,在找设备id
-                        if (Objects.isNull(accountEntity)) {
-                            if (Objects.isNull(loginDto.getDeviceId())) {
-                                return PlatResultDto.faild("设备id错误");
-                            }
-                            List<AccountEntity> list = accountDao.listByDeviceIdOfBindType(loginDto.getDeviceId(),
-                                    BindType.guest.getId(), loginDto.getChannelId());
-                            if (!CollectionUtils.isEmpty(list)) {
-                                accountEntity = list.get(0);
-                            }
-                        }
-                        String playerId;
-                        if (Objects.isNull(accountEntity)) {
-                            List<AccountEntity> list = accountDao.listByDeviceIdOfBindType(loginDto.getDeviceId(),
-                                    BindType.guest.getId(), loginDto.getChannelId());
-                            if (!CollectionUtils.isEmpty(list)) {
-                                accountEntity = list.get(0);
-                                String uuid = accountEntity.getUuid();
-                                playerId = accountEntity.getBindAccount();
-                                Map<String, String> map = Maps.newHashMap();
-                                map.put("clientId", uuid);
-                                map.put("playerId", playerId);
-                                loginDto.setUuid(RSAUtil.encryptByPublicKey(JSON.toJSONString(map)));
-                            } else {
-                                playerId = playerIdSeq.getPlayerId();
-                            }
-                        } else {
-                            playerId = accountEntity.getBindAccount();
-                        }
-                        return PlatResultDto.succ(playerId, AuditType.NONE, loginDto.getLoginPlat());
-                    } catch (Exception e) {
-                        log.error("非法的uuid");
-                        e.printStackTrace();
-                        return PlatResultDto.faild("非法的uuid");
-                    }
-
-                }
-                default:
-                    return PlatResultDto.faild("登录方式未找到");
+            String identityToken =
+                    "eyJhbGciOiJSUzI1NiIsImtpZCI6IjU5NjJlN2EwNTljN2Y1YzBjMGQ1NmNiYWQ1MWZlNjRjZWVjYTY3YzYiLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJodHRwczovL2FjY291bnRzLmdvb2dsZS5jb20iLCJhenAiOiI2NTEyMjI1MjQwNTMtOTNuZWg3ZTFqZThtMWw1NmljOWM0Z21yb2dnZWZrcTAuYXBwcy5nb29nbGV1c2VyY29udGVudC5jb20iLCJhdWQiOiI2NTEyMjI1MjQwNTMtNGZrcW9zZjZobWNrbzY3cnIzdW9vbGUyZmZhbjYyN2ouYXBwcy5nb29nbGV1c2VyY29udGVudC5jb20iLCJzdWIiOiIxMTY3MDUxOTAyMDg2ODAxMzQwMzQiLCJlbWFpbCI6Impvc2VwaGppZTU4ODMxQGdtYWlsLmNvbSIsImVtYWlsX3ZlcmlmaWVkIjp0cnVlLCJuYW1lIjoiT25nIFNpYW4gSmllIiwicGljdHVyZSI6Imh0dHBzOi8vbGgzLmdvb2dsZXVzZXJjb250ZW50LmNvbS9hL0FFZEZUcDRwdFFhUHo0RDg4cmgtSGhpV3B4SksxRUMxRXgtM3dGXzY5VFIxPXM5Ni1jIiwiZ2l2ZW5fbmFtZSI6Ik9uZyIsImZhbWlseV9uYW1lIjoiU2lhbiBKaWUiLCJsb2NhbGUiOiJlbiIsImlhdCI6MTY3Njc5MzU2MiwiZXhwIjoxNjc2Nzk3MTYyfQ.bST5ZLpWJay_BjysWGbQCL-7Z_gvfgPpiwBFAZx6JgLy6viDhu6BTcWE68uxWZVPt8g7tCeDY2BKFWA6FOSeQZ4BM5PcCURUmq4pXyGkpcY1itOEswLeIHlany2UNtLDuO6QeLHlGyFtdSk57OyUrG5VeQOHd-rING8znaCtyPechXuvw8bTxAOxmgnMOjQHvfPV2rBQDgz3HTpg5dSerchHOSMHh3YWqoKTFH2z3UsunsrJ0om2WsfuZCHsnt4lw4E3CkGJ0BSTdP-6hOl8JPiKxkIOWrrA4uosLUd-oUGV7FfpHriom7fEe2mWoa2jUX6Szd8NEbRpyjUXiDahbQ";
+            try {
+                GoogleIdToken verify = verifier.verify(identityToken);
+                log.info("token:{}", verify);
+                GoogleIdToken.Payload payload = verify.getPayload();
+                String subject = payload.getSubject();
+                log.info("subject:{}", subject);
+            } catch (Exception e) {
+                log.error("登录错误:{}", e.getMessage(), e);
             }
-
         } catch (Exception e) {
-            log.error("tiny_and登录失败:{}", e.getMessage(), e);
+            e.printStackTrace();
         }
-        return PlatResultDto.faild("登录异常");
+
+        return "ok;";
     }
 
-    @Override
-    public String getLoginPlat() {
-        return "tinynet_banhao";
-    }
+    @RequestMapping("/account/gmTools.do") // 后台的所有请求都走到这边来
+    public String gmTools(@RequestBody HttpPacket packet) {
+        log.info("后台发送的消息:" + packet.toString());
+        JSONObject data = packet.getData();
+        String type = (String) data.get("type");
 
-    private String getBody(HttpServletRequest request) throws IOException {
-        BufferedReader br = request.getReader();
-        String str, wholeStr = "";
-        while ((str = br.readLine()) != null) {
-            wholeStr += str;
+        if (StringUtils.isBlank(type)) {
+            throw new NullPointerException();
         }
-        return wholeStr;
+
+        switch (type) {
+            case GmOpType.BU_DAN:
+            case GmOpType.SYS_RECHARGE:
+                PayInfo payInfo = new PayInfo();
+                String channelId = (String) data.get("channelId");
+                String orderId = (String) data.get("orderId");
+                payInfo.setChannelId(channelId);
+                payInfo.setOrderId(orderId);
+                return accountService.buDan(payInfo);
+            // case GmOpType.Silence:
+            // case GmOpType.Forbid:
+            // case GmOpType.GetPayAct:
+            // case GmOpType.QueryChat:
+            // case GmOpType.ServerKeep:
+            // case GmOpType.ReloadAct:
+            // case GmOpType.ReloadItem:
+            // int serverId = data.getInteger("serverId");
+            // String url = serverCache.getServer(serverId).getHttpAddress();
+            // return DuokeHttpUtil.sentPost(url, JSON.toJSONString(packet));
+            default:
+                int serverId = data.getInteger("serverId");
+                String url = serverCache.getServer(serverId).getHttpAddress();
+                return DuokeHttpUtil.sentPost(url, JSON.toJSONString(packet));
+            // throw new NullPointerException("未到找到发送类型:" + type);
+
+        }
     }
 
-    @Override
-    public String payBack(HttpServletRequest request) {
-        String body = null;
+    @PostMapping("/account/inner.do")
+    public String inner(HttpServletRequest request, @RequestBody HttpPacket packet) {
+        log.info("游服发送的消息:" + packet.toString());
+        GameError gameError = GameError.SUCCESS;
         try {
-            body = getBody(request);
-            log.info("google 开始充值:{}", body);
-            JSONObject jsonObject = JSONObject.parseObject(body);
-//            JSONObject receipt = jsonObject.getJSONObject("receipt");
-//            JSONObject Payload = receipt.getJSONObject("Payload");
-//            JSONObject json = Payload.getJSONObject("json");
-            String mark = jsonObject.getString("mark");
-            String uid = jsonObject.getString("uid");
-            String serverId = jsonObject.getString("server_id");
-
-
-//            Integer purchaseState = json.getInteger("purchaseState");
-//            if (Objects.isNull(purchaseState) || purchaseState != 0) {
-//                log.error("订单尚未支付:{}", json);
-//                return "-1";
-//            }
-
-
-            String[] p = mark.split("\\|");
-            long roleId = Long.parseLong(p[0]);
-            String channel = p[3];
-            String gameOrder = p[4];
-
-
-            String productId = gameOrder.split("_")[3];
-            String orderId = UUID.randomUUID().toString();
-
-            Integer amount = productMap.get(productId);
-            if (Objects.isNull(amount)) {
-                log.error("没有配置该productId:{}", productId);
-                return "-1";
-            }
-
-            PayInfo payInfo = new PayInfo();
-            // 1测试 0正式'
-            payInfo.setIsTest(0);
-            payInfo.setChannelId("" + channel);
-            payInfo.setChannelUid(uid);
-
-            payInfo.setSerialId(gameOrder);
-            payInfo.setOrderId(orderId);
-            payInfo.setPayTime(new Date());
-            payInfo.setAmount(amount);
-            payInfo.setRealAmount(amount);
-            // 初始状态， 1回调加道具成功
-//            payInfo.setState(0);
-            payInfo.setState(1);
-            payInfo.setExtrasParams(mark);
-            payInfo.setServerId(Integer.parseInt(serverId));
-            payInfo.setRoleId(roleId);
-
-            // 如果充值成功
-            PayInfo pay = payDao.selectPay(payInfo);
-            if (Objects.nonNull(pay) && pay.getState() == PayState.SUCCESS.getCode()) {
-                log.info("google 重复充值:{}", payInfo);
-                return "1";
-            }
-
-            int code = payToGameServer(payInfo);
-            if (code != 0) {
-                log.info("PayBack_ERROR code:{}", code);
-                return "" + code;
-            }
-
-            // if (!test) {
-            // 测试请求不发送tapdb
-//            JSONObject postData = new JSONObject();
-//            postData.put("module", "GameAnalysis");
-//            postData.put("name", "charge");
-//            postData.put("index", "7npziomfy9w1wj9o");
-//            postData.put("identify", uid);
-//            JSONObject properties = new JSONObject();
-//            properties.put("order_id", orderId);
-//            properties.put("amount", amount);
-//            properties.put("virtual_currency_amount", amount);
-//            properties.put("currency_type", "USD");
-//            properties.put("product", productId);
-//            properties.put("payment", channel);
-//            postData.put("properties", properties);
-//            String resultStr = "";
-//            try {
-//                resultStr = DuokeHttpUtil.restCallerPost("https://e.tapdb.net/event", postData.toJSONString());
-//                log.info("tapdb success :{}", receipt);
-//            } catch (Exception e) {
-//                log.error("tapdb error:{}", resultStr, e);
-//            }
-
-            // } else {
-            // 测试充值
-            // 充值成功发送确认请求
-            // ProductPurchasesAcknowledgeRequest r = new ProductPurchasesAcknowledgeRequest();
-            // r.setFactory(jsonFactory);
-            // r.setDeveloperPayload(Payload.toJSONString());
-            // purchases.products().acknowledge(json.getString("packageName"), json.getString("productId"),
-            // json.getString("purchaseToken"), r).execute();
-            // }
-
-            return "1";
-        } catch (Exception e) {
-            log.error("google pay 充值异常:{} body:{}", e.getMessage(), body, e);
-            return "-1";
+            Handler handler = MessagePool.getIns().getHander(packet.getCmdId());
+            gameError = handler.handle(packet);
+        } catch (InstantiationException e) {
+            e.printStackTrace();
+        } catch (IllegalAccessException e) {
+            e.printStackTrace();
         }
-    }
-
-    public static void main(String[] args) {
-        String mark = "100864|0|101|tinynet_banhao|100864_tinynet_banhao_com.tinynet.hero.120_1754052300";
-        String[] p = mark.split("\\|");
-        long roleId = Long.parseLong(p[0]);
-        String channel = p[3];
-        String gameOrder = p[4];
-
-        System.out.println(gameOrder.split("_")[3]);
-        System.out.println(UUID.randomUUID().toString());
+        return String.valueOf(gameError.getCode());
     }
 
 }
