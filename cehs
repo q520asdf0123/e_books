@@ -1,32 +1,114 @@
 package com.tiny.hero.plat.module.channel;
 
-import com.tiny.hero.plat.module.account.domain.vo.AuditVo;
-import org.apache.ibatis.annotations.Param;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RestController;
-
+import com.alibaba.fastjson.JSONObject;
+import com.tiny.hero.plat.common.constant.GameError;
 import com.tiny.hero.plat.common.domain.ResponseDTO;
+import com.tiny.hero.plat.module.account.dao.PayDao;
+import com.tiny.hero.plat.module.account.dao.RoleDao;
+import com.tiny.hero.plat.module.account.domain.vo.AuditVo;
+import com.tiny.hero.plat.module.channel.domain.entity.ChannelEntity;
+import com.tiny.hero.plat.module.channel.domain.entity.PlatEntity;
+import com.tiny.hero.plat.module.identityCard.dao.IdentityCardDao;
+import com.tiny.hero.plat.module.identityCard.entity.IdentityCard;
+import com.tiny.hero.plat.util.HolidayUtils;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
+import java.util.Date;
+import java.util.List;
+import java.util.Objects;
 
-@RestController
-public class AuditController {
+@Service
+public class AuditService {
 
     @Resource
-    private AuditService auditService;
+    private PlatCache platCache;
 
-    @GetMapping("/plat/auditPlat")
-    public ResponseDTO<Boolean> auditPlat(@Param("channel") String channel) {
-        return auditService.isBanhao(channel);
+    @Resource
+    private ChannelCache channelCache;
+    @Resource
+    private IdentityCardDao identityCardDao;
+    @Resource
+    private PayDao payDao;
+    @Resource
+    private RoleDao roleDao;
+    @Value("${open.auto}")
+    private boolean openAuto;
+
+    public ResponseDTO<Boolean> isBanhao(String channel) {
+        ChannelEntity channelEntity = channelCache.getChannel(channel);
+        if (Objects.isNull(channelEntity)) {
+            return ResponseDTO.wrap(GameError.SYSTEM_ERROR);
+        }
+
+        PlatEntity plat = platCache.getPlat(channelEntity.getLoginPlat());
+        if (Objects.isNull(plat)) {
+            return ResponseDTO.wrap(GameError.SYSTEM_ERROR);
+        }
+
+        return ResponseDTO.succData(plat.getBanhao() == 1);
     }
 
-    @GetMapping("/plat/auditUserInfo")
-    public ResponseDTO<AuditVo> auditUserInfo(@Param("userId") int userId) {
-        return auditService.auditUserInfo(userId);
+    public ResponseDTO<AuditVo> auditUserInfo(int userId) {
+        IdentityCard identityCard = identityCardDao.queryId(userId);
+        String birthday = JSONObject.parseObject(identityCard.getIdCardInfor()).getJSONObject("IdCardInfor")
+                .getString("birthday");
+        String[] split = birthday.split("-");
+        LocalDate localDate =
+                LocalDate.of(Integer.parseInt(split[0]), Integer.parseInt(split[1]), Integer.parseInt(split[2]));
+        LocalDate curr = LocalDate.now();
+        long year = ChronoUnit.YEARS.between(localDate, curr);
+
+        List<Long> roleIds = roleDao.selectRoleIdsByUserId(userId);
+
+        Integer total = 0;
+        if (!roleIds.isEmpty()) {
+            // 获取本月第一天和最后一天，格式化为字符串
+            LocalDateTime startOfMonth = LocalDateTime.now().withDayOfMonth(1).withHour(0).withMinute(0).withSecond(0).withNano(0);
+            LocalDateTime endOfMonth = startOfMonth.plusMonths(1).minusSeconds(1);
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+            String startTime = startOfMonth.format(formatter);
+            String endTime = endOfMonth.format(formatter);
+
+            total = payDao.getTotalAmountByRoleIds(roleIds, startTime, endTime);
+        }
+
+        AuditVo auditVo = new AuditVo();
+        auditVo.setTotalRechargeAmount(total);
+        auditVo.setCurYear((int) year);
+
+        int curMinute = HolidayUtils.surplusMinute();
+        if (!HolidayUtils.isWorkingDay() || curMinute <= 0) {
+            auditVo.setCurMinute(-1);
+        }
+
+        if (year < 8) {
+            auditVo.setMaxRechargeAmount(0);
+            auditVo.setMaxSingleRechargeAmount(0);
+        } else if (year < 16) {
+            auditVo.setMaxSingleRechargeAmount(5000);
+            auditVo.setMaxRechargeAmount(20000);
+        } else if (year < 18) {
+            auditVo.setMaxSingleRechargeAmount(10000);
+            auditVo.setMaxRechargeAmount(40000);
+        } else {
+            auditVo.setMaxSingleRechargeAmount(99999999);
+            auditVo.setMaxRechargeAmount(99999999);
+            auditVo.setCurMinute(9999);
+        }
+
+        return ResponseDTO.succData(auditVo);
     }
 
-    @GetMapping("/plat/updateRoleInfo")
-    public ResponseDTO<Void> updateRoleInfo(@Param("userId") int userId, @Param("roleId") long roleId) {
-        return auditService.updateRoleInfo(userId, roleId);
+
+    public ResponseDTO<Void> updateRoleInfo(int userId, long roleId) {
+        roleDao.upsertRole(userId, roleId);
+        return ResponseDTO.succ();
     }
 }
